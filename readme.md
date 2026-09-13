@@ -1,11 +1,24 @@
-const std = @import("std");
-const Stdio = @import("ZigStdIo").StdIo;
+# ZigStdIo 
+A Zig tool that gives the user simple ways to output to `stdout` and `stderr`, as well as to read from `stdin`.  
 
+## To Install: 
+> **Command Line**:  
+> ```zig fetch --save ""```
+
+> **build.zig**: 
+> ```zig
+> const stdio_dep = b.dependency("ZigStdIo", .{.targert = target});
+> const stdio_mod = b.stdio_dep.module("ZigStdIo");
+> exe.root_module.addImport("ZigStdIo", stdio_mod);
+>```
+
+# Example: 
+```zig
 pub fn main(init: std.process.Init) !void {
     var stdio = try Stdio.init(init.gpa, init.io, 1024);
     defer stdio.deinit();
     
-    try stdio.cls();
+    try stdio.cls(); // Clear screen
     try stdio.writeln("Hello world");
     try stdio.print("Today is: {s}\n", .{"Tuesday"});
 
@@ -19,3 +32,4 @@ pub fn main(init: std.process.Init) !void {
         try stdio.errorPrint("Program failed!\n", .{}, 69);
     }
 }
+```

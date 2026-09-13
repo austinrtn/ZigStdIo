@@ -13,6 +13,7 @@ pub const StdIo = struct {
     stdin: std.Io.File.Reader = undefined,
     inner: Inner, 
 
+    /// Create new StdIo instance
     pub fn init(allocator: std.mem.Allocator, io: std.Io, buf_size: usize) !Self {
         var inner: Inner = .{.allocator = allocator, .io = io};
         inner.stdout_buf = try allocator.alloc(u8, buf_size);
@@ -36,6 +37,12 @@ pub const StdIo = struct {
         allocator.free(self.inner.res_buf);
     }
 
+    /// Clears screen using ANSI escape sequence
+    pub fn cls(self: *Self) !void {
+        try self.write("\x1b[2J\x1b[H");
+    }
+
+    /// Set buffer size for specificed file buffer
     pub fn setBufferSize(self: *Self, file_buffer: FileBuffer, size: usize) !void {
         const allocator = self.inner.allocator;
         
@@ -46,34 +53,41 @@ pub const StdIo = struct {
         }
     }
     
+    /// Write and flush to stdout
     pub fn write(self: *Self, bytes: []const u8) !void {
         const writer = &self.stdout.interface;
         _ = try writer.write(bytes);
         try writer.flush();
     }
 
+    /// Print, format and flush to stdout
     pub fn print(self: *Self, comptime fmt: []const u8, args: anytype) !void {
         const writer = &self.stdout.interface;
         try writer.print(fmt, args);
         try writer.flush();
     }
 
-    pub fn println(self: *Self, bytes: []const u8) !void {
+    /// Write bytes and flush to stdout with new line
+    pub fn writeln(self: *Self, bytes: []const u8) !void {
         try self.print("{s}\n", .{bytes});
     }
 
+    /// Write to stdout without flushing
     pub fn writeAndHold(self: *Self, bytes: []const u8) !void {
         _ = try self.stdout.interface.write(bytes);
     }
 
+    /// Print and format to stdout without flushing 
     pub fn printAndHold(self: *Self, comptime fmt: []const u8, args: anytype) !void {
         try self.stdout.interface.print(fmt, args);
     }
 
+    /// Flush stdout 
     pub fn flushStdout(self: *Self) !void {
         try self.stdout.interface.flush();
     }
 
+    /// Print and flush to stderr and exit program with error-code 
     pub fn errorPrint(self: *Self, comptime fmt: []const u8, args: anytype, err_code: u8) !void {
         const writer = &self.stderr.interface;
         try writer.print(fmt, args);
@@ -82,6 +96,8 @@ pub const StdIo = struct {
         std.process.exit(err_code);
     }
 
+    /// Wait for stdin input to be read with newline as the delimiter. 
+    /// The response will be overwritten in memory next time this input function is called 
     pub fn input(self: *Self, comptime prompt: ?[]const u8, args: anytype) ![]const u8 {
         if(prompt) |p| try self.print(p, args);
         
@@ -92,6 +108,8 @@ pub const StdIo = struct {
         return self.inner.res_buf[0..res.len];
     }
 
+    /// Wait for stdin input to be read with newline as the delimiter. 
+    /// Store input in a separate buffer.
     pub fn captureInputBuf(self: *Self, comptime prompt: ?[]const u8, args: anytype, buf: []u8) ![]const u8 {
         if(prompt) |p| try self.print(p, args);
         
@@ -102,6 +120,8 @@ pub const StdIo = struct {
         return buf[0..res.len];
     }
 
+    /// Wait for stdin input to be read with newline as the delimiter. 
+    /// Allocate memory for input.  Memory is owned by the caller
     pub fn captureInputAlloc(self: *Self, comptime prompt: ?[]const u8, args: anytype, allocator: std.mem.Allocator) ![]const u8 {
         if(prompt) |p| try self.print(p, args);
         
