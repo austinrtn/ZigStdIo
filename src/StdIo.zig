@@ -73,12 +73,12 @@ pub const StdIo = struct {
     }
 
     /// Write to stdout without flushing
-    pub fn writeAndHold(self: *Self, bytes: []const u8) !void {
+    pub fn writeNoFlush(self: *Self, bytes: []const u8) !void {
         _ = try self.stdout.interface.write(bytes);
     }
 
     /// Print and format to stdout without flushing 
-    pub fn printAndHold(self: *Self, comptime fmt: []const u8, args: anytype) !void {
+    pub fn printNoFlush(self: *Self, comptime fmt: []const u8, args: anytype) !void {
         try self.stdout.interface.print(fmt, args);
     }
 
@@ -87,13 +87,14 @@ pub const StdIo = struct {
         try self.stdout.interface.flush();
     }
 
-    /// Print and flush to stderr and exit program with error-code 
-    pub fn errorPrint(self: *Self, comptime fmt: []const u8, args: anytype, err_code: u8) !void {
+    /// Print and flush to stderr.  Non-null error_code will exit the program with
+    /// std.process.exit.  Null error code will cause the function to return normally.
+    pub fn errorPrint(self: *Self, comptime fmt: []const u8, args: anytype, error_code: ?u8) !void {
         const writer = &self.stderr.interface;
         try writer.print(fmt, args);
         try writer.flush();
 
-        std.process.exit(err_code);
+        if(error_code) |code| std.process.exit(code);
     }
 
     /// Wait for stdin input to be read with newline as the delimiter. 
