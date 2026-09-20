@@ -28,6 +28,24 @@ pub fn main(init: std.process.Init) !void {
         break;
     }
     
+    while(true) {
+        const answer = stdio.getYesOrNo("Yes or no?  [y/n]\n", .{}) catch |err| {
+            switch(err) {
+                error.InvalidInput => try stdio.writeln("Invalid input! Try again"),
+                error.NoInput => try stdio.writeln("No input entered! Try again"),
+                else => return err,
+            }
+
+            _ = try stdio.input(null, .{});
+            try stdio.cls();
+            continue;
+        };
+        
+        if(answer) try stdio.writeln("You selected YES")
+        else try stdio.writeln("You selected NO");
+        break;
+    }
+    
     try stdio.writeln("Press enter 3 times...");
     try stdio.writeNoFlush("Holding 1...");
     _ = try stdio.input(null, .{});
