@@ -2,7 +2,7 @@ const std = @import("std");
 const FileBuffer = enum {
     stdout,
     stdin,
-    stderr, 
+    stderr,
 };
 
 pub const StdIo = struct {
@@ -11,21 +11,21 @@ pub const StdIo = struct {
     stdout: std.Io.File.Writer = undefined,
     stderr: std.Io.File.Writer = undefined,
     stdin: std.Io.File.Reader = undefined,
-    inner: Inner, 
+    inner: Inner,
 
     /// Create new StdIo instance
     pub fn init(allocator: std.mem.Allocator, io: std.Io, buf_size: usize) !Self {
-        var inner: Inner = .{.allocator = allocator, .io = io};
+        var inner: Inner = .{ .allocator = allocator, .io = io };
         inner.stdout_buf = try allocator.alloc(u8, buf_size);
         inner.stderr_buf = try allocator.alloc(u8, buf_size);
         inner.stdin_buf = try allocator.alloc(u8, buf_size);
         inner.res_buf = try allocator.alloc(u8, buf_size);
-        
-        var self: Self = .{.inner = inner};
+
+        var self: Self = .{ .inner = inner };
         self.stdout = std.Io.File.Writer.init(.stdout(), io, inner.stdout_buf);
         self.stderr = std.Io.File.Writer.init(.stderr(), io, inner.stderr_buf);
         self.stdin = std.Io.File.Reader.init(.stdin(), io, inner.stdin_buf);
-        
+
         return self;
     }
 
@@ -45,14 +45,14 @@ pub const StdIo = struct {
     /// Set buffer size for specificed file buffer
     pub fn setBufferSize(self: *Self, file_buffer: FileBuffer, size: usize) !void {
         const allocator = self.inner.allocator;
-        
+
         switch (file_buffer) {
             .stdout => try allocator.realloc(self.inner.stdout_buf, size),
             .stderr => try allocator.realloc(self.inner.stdout_buf, size),
             .stdin => try allocator.realloc(self.inner.stdout_buf, size),
         }
     }
-    
+
     /// Write and flush to stdout
     pub fn write(self: *Self, bytes: []const u8) !void {
         const writer = &self.stdout.interface;
@@ -77,12 +77,12 @@ pub const StdIo = struct {
         _ = try self.stdout.interface.write(bytes);
     }
 
-    /// Print and format to stdout without flushing 
+    /// Print and format to stdout without flushing
     pub fn printNoFlush(self: *Self, comptime fmt: []const u8, args: anytype) !void {
         try self.stdout.interface.print(fmt, args);
     }
 
-    /// Flush stdout 
+    /// Flush stdout
     pub fn flushStdout(self: *Self) !void {
         try self.stdout.interface.flush();
     }
@@ -94,49 +94,110 @@ pub const StdIo = struct {
         try writer.print(fmt, args);
         try writer.flush();
 
-        if(error_code) |code| std.process.exit(code);
+        if (error_code) |code| std.process.exit(code);
     }
 
-    /// Wait for stdin input to be read with newline as the delimiter. 
-    /// The response will be overwritten in memory next time this input function is called 
+    /// Wait for stdin input to be read with newline as the delimiter.
+    /// The response will be overwritten in memory next time this input function is called
     pub fn input(self: *Self, comptime prompt: ?[]const u8, args: anytype) ![]const u8 {
-        if(prompt) |p| try self.print(p, args);
-        
+        if (prompt) |p| try self.print(p, args);
+
         const res = try self.stdin.interface.takeDelimiter('\n') orelse return error.EndOfStream;
-        
-        if(res.len > self.inner.res_buf.len) return error.BufSizeTooSmall;
+
+        if (res.len > self.inner.res_buf.len) return error.BufSizeTooSmall;
         @memcpy(self.inner.res_buf[0..res.len], res);
         return self.inner.res_buf[0..res.len];
     }
 
-    /// Wait for stdin input to be read with newline as the delimiter. 
+    /// Wait for stdin input to be read with newline as the delimiter.
     /// Store input in a separate buffer.
     pub fn captureInputBuf(self: *Self, comptime prompt: ?[]const u8, args: anytype, buf: []u8) ![]const u8 {
-        if(prompt) |p| try self.print(p, args);
-        
+        if (prompt) |p| try self.print(p, args);
+
         const res = try self.stdin.interface.takeDelimiter('\n') orelse return error.EndOfStream;
-        
-        if(res.len > self.inner.res_buf.len) return error.BufSizeTooSmall;
+
+        if (res.len > self.inner.res_buf.len) return error.BufSizeTooSmall;
         @memcpy(buf, res);
         return buf[0..res.len];
     }
 
-    /// Wait for stdin input to be read with newline as the delimiter. 
+    /// Wait for stdin input to be read with newline as the delimiter.
     /// Allocate memory for input.  Memory is owned by the caller
     pub fn captureInputAlloc(self: *Self, comptime prompt: ?[]const u8, args: anytype, allocator: std.mem.Allocator) ![]const u8 {
-        if(prompt) |p| try self.print(p, args);
-        
+        if (prompt) |p| try self.print(p, args);
+
         const res = try self.stdin.interface.takeDelimiter('\n') orelse return error.EndOfStream;
-        
-        if(res.len > self.inner.res_buf.len) return error.BufSizeTooSmall;
+
+        if (res.len > self.inner.res_buf.len) return error.BufSizeTooSmall;
         return try allocator.dupe(u8, res);
+    }
+
+    pub fn strictInput(
+        self: *Self,
+        comptime prompt: ?[]const u8,
+        args: anytype,
+        comptime input_options: []const []const u8,
+        comptime case_sensitve: bool,
+    ) !InputToEnum(input_options, case_sensitve) {
+        const in = try self.input(prompt, args);
+        if (case_sensitve) {
+            for (in) |*char| char.* = std.ascii.toLower(char.*);
+        }
+
+        return getEnumFromInput(in, input_options, case_sensitve);
+    }
+
+    pub fn getYesOrNo(
+        self: *Self,
+        comptime prompt: ?[]const u8,
+        args: anytype,
+        comptime options: struct { yes: []const u8 = "y", no: []const u8 = "n" },
+    ) !?bool {
+        const in = try self.input(prompt, args);
+        var in_lower: [in.len]u8 = undefined;
+        @memcpy(&in_lower, in);
+        
+        for(&in_lower) |*char| char.* = std.ascii.toLower(char.*);
+
+        //if(std.mem.eql(u8, in_lower, std.ascii.toLower(c: u8)))
     }
 };
 
+fn InputToEnum(comptime input_options: []const []const u8, comptime case_sensitive: bool) type {
+    var fields: [input_options.len + 1][]const u8 = undefined;
+    var values: [input_options.len + 1]u8 = undefined;
+
+    fields[0] = "invalid";
+    values[0] = 0;
+
+    for (1..input_options.len + 1) |i| {
+        var option: [input_options[i - 1].len]u8 = undefined;
+        @memcpy(&option, input_options[i - 1]);
+
+        if (!case_sensitive) {
+            for (&option) |*char| char.* = std.ascii.toLower(char.*);
+        }
+
+        fields[i] = &option;
+        values[i] = @intCast(i);
+    }
+
+    return @Enum(
+        u8,
+        .exhaustive,
+        &fields,
+        &values,
+    );
+}
+
+fn getEnumFromInput(input: []const u8, comptime input_options: []const []const u8, comptime case_sensitve: bool) InputToEnum(input_options, case_sensitve) {
+    return std.meta.stringToEnum(InputToEnum(input_options, case_sensitve), input) orelse .invalid;
+}
+
 const Inner = struct {
-    allocator: std.mem.Allocator, 
-    io: std.Io, 
-    
+    allocator: std.mem.Allocator,
+    io: std.Io,
+
     stdout_buf: []u8 = undefined,
     stderr_buf: []u8 = undefined,
     stdin_buf: []u8 = undefined,
