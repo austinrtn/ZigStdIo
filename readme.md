@@ -3,7 +3,7 @@ A Zig tool that gives the user simple ways to output to `stdout` and `stderr`, a
 
 ## To Install: 
 > **Command Line**:  
-> ```zig fetch --save ""https://github.com/austinrtn/ZigStdIo/archive/refs/tags/1.3.tar.gz```
+> ```zig fetch --save "https://github.com/austinrtn/ZigStdIo/archive/refs/tags/1.3.tar.gz"```
 
 > **build.zig**: 
 > ```zig
